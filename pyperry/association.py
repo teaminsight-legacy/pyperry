@@ -163,7 +163,7 @@ class Association(object):
         poly_type = None
         if (self.options.has_key('polymorphic') and
             self.options['polymorphic'] and obj):
-            if type(obj.__class__) in [pyperry.base.Base, pyperry.base.BaseMeta]:
+            if isinstance(obj, pyperry.base.Base):
                 poly_type = getattr(obj, '%s_type' % self.id)
             else:
                 poly_type = obj
