@@ -5,3 +5,4 @@ pyperry.egg-info/
 html/
 *.pkl
 *.log
+virtualenv/

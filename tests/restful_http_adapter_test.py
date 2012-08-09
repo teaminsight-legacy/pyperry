@@ -142,38 +142,6 @@ class ParamsForMethodTestCase(HttpAdapterTestCase):
         params = adapter.params_for(self.model)
         self.assertEqual(params, {'widget': self.model.fields})
 
-    def test_with_default_params(self):
-        """should include the default_options with the attribuets"""
-        self.config['default_params'] = {'foo': 'bar'}
-        expected = copy(self.model.fields)
-        expected.update({'foo':'bar'})
-
-        adapter = RestfulHttpAdapter(self.config)
-        params = adapter.params_for(self.model)
-        self.assertEqual(params, expected)
-
-    def test_with_default_params_and_params_wrapper(self):
-        """should include the attributes inside the wrapper and the default
-        params outside the wrapper"""
-        self.config['default_params'] = {'foo': 'bar', 'widget': 5}
-        self.config['params_wrapper'] = 'widget'
-        expected = copy(self.config['default_params'])
-        expected.update(copy({'widget':self.model.fields}))
-
-        adapter = RestfulHttpAdapter(self.config)
-        params = adapter.params_for(self.model)
-        self.assertEqual(params, expected)
-
-    def test_dont_modify_default_params(self):
-        """should not modify the default_params when building params"""
-        self.config['default_params'] = {'foo':'bar'}
-        expected = copy(self.config['default_params'])
-
-        adapter = RestfulHttpAdapter(self.config)
-        params = adapter.params_for(self.model)
-        self.assertEqual(adapter.config['default_params'], expected)
-
-
 class ReadTestCase(HttpAdapterTestCase):
 
     def setUp(self):
@@ -237,6 +205,34 @@ class ReadTestCase(HttpAdapterTestCase):
 
         self.assertEqual(query, expected)
 
+    def test_default_params_in_query(self):
+        """should include the default_params in the query string"""
+        r = pyperry.Base.scoped().where({'id': 3}).limit(1)
+        self.config['default_params'] = {'foo': 'bar'}
+        adapter = RestfulHttpAdapter(self.config)
+        adapter.read(relation=r)
+
+        expected = 'where[][id]=3&limit=1&foo=bar'
+        expected = expected.replace('[', '%5B').replace(']', '%5D')
+        expected = expected.split('&')
+        expected.sort()
+
+        last_request = http_server.last_request()
+        query = last_request['path'].split('?')[1]
+        query = query.split('&')
+        query.sort()
+
+        self.assertEqual(query, expected)
+
+    def test_dont_modify_default_params(self):
+        """should not modify the default_params when building a query string"""
+        r = pyperry.Base.scoped().where({'id': 3}).limit(1)
+        self.config['default_params'] = {'foo': 'bar'}
+        expected = copy(self.config['default_params'])
+        adapter = RestfulHttpAdapter(self.config)
+        adapter.read(relation=r)
+
+        self.assertEqual(adapter.config['default_params'], expected)
 
     def test_records(self):
         """should return a list of records retrieved from the response"""
@@ -264,6 +260,10 @@ class PersistenceTestCase(HttpAdapterTestCase):
 
     def respond_with_success(self, **kwargs):
         http_server.set_response(**kwargs)
+
+    def adapter_method(self, **kwargs):
+        method = getattr(self.adapter, self.adapter_method_name)
+        return method(**kwargs)
 
     def respond_with_failure(self, **kwargs):
         error_kwargs = {'status': 500, 'body': 'ERROR'}
@@ -323,6 +323,38 @@ class PersistenceTestCase(HttpAdapterTestCase):
         self.assertEqual(last_request['headers']['content-type'],
                          'application/x-www-form-urlencoded')
 
+    def test_default_params_in_query(self):
+        """should include the default_params in the query string"""
+        if type(self) is PersistenceTestCase: return
+        self.respond_with_success()
+        self.config['default_params'] = {'foo': 'bar'}
+        self.adapter = RestfulHttpAdapter(self.config)
+
+        response = self.adapter_method(model=self.model)
+
+        expected = 'foo=bar'
+        expected = expected.split('&')
+        expected.sort()
+
+        last_request = http_server.last_request()
+        query = last_request['path'].split('?')[1]
+        query = query.split('&')
+        query.sort()
+
+        self.assertEqual(query, expected)
+
+    def test_dont_modify_default_params(self):
+        """should not modify the default_params when building a query string"""
+        if type(self) is PersistenceTestCase: return
+        self.respond_with_success()
+        self.config['default_params'] = {'foo': 'bar'}
+        expected = copy(self.config['default_params'])
+        self.adapter = RestfulHttpAdapter(self.config)
+
+        response = self.adapter_method(model=self.model)
+
+        self.assertEqual(self.adapter.config['default_params'], expected)
+
 
 class CreateTestCase(PersistenceTestCase):
     """Run tests from PersistenceTestCase configured for creating a record"""
@@ -331,7 +363,7 @@ class CreateTestCase(PersistenceTestCase):
         super(CreateTestCase, self).setUp()
         self.model.new_record = True
         self.http_method = 'POST'
-        self.adapter_method = self.adapter.write
+        self.adapter_method_name = 'write'
         print "\n\tCreateTestCase" # Will display if test fails, so we know
                                    # which test case the fail was from.
 
@@ -343,7 +375,7 @@ class UpdateTestCase(PersistenceTestCase):
         super(UpdateTestCase, self).setUp()
         self.model.new_record = False
         self.http_method = 'PUT'
-        self.adapter_method = self.adapter.write
+        self.adapter_method_name = 'write'
         print "\n\tUpdateTestCase"
 
 
@@ -354,7 +386,7 @@ class DeleteTestCase(PersistenceTestCase):
         super(DeleteTestCase, self).setUp()
         self.model.new_record = False
         self.http_method = 'DELETE'
-        self.adapter_method = self.adapter.delete
+        self.adapter_method_name = 'delete'
         print "\n\tDeleteTestCase"
 
 

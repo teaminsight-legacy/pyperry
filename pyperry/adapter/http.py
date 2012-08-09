@@ -42,8 +42,8 @@ class RestfulHttpAdapter(AbstractAdapter):
           'foo'})} with C{params_wrapper='mod'}, the data encoded for the HTTP
           request will include C{mod[id]=4&mod[name]=foo}
 
-        - B{default_params}: a python dict of additional paramters to include
-          alongside the models attributes in any write or delete request.
+        - B{default_params}: a python dict of additional parameters to build
+          into the query string.
 
           These parameters will not be wrapped in the C{params_wrapper} if that
           option is also present. One thing C{default_params} are useful for
@@ -69,7 +69,6 @@ class RestfulHttpAdapter(AbstractAdapter):
         if query_string is not None:
             url += query_string
 
-
         http_response, body = self.http_request('GET', url, {}, **kwargs)
         response = self.response(http_response, body)
         records = response.parsed()
@@ -92,6 +91,15 @@ class RestfulHttpAdapter(AbstractAdapter):
     def persistence_request(self, http_method, **kwargs):
         model = kwargs['model']
         url = self.url_for(http_method, model)
+
+        if 'default_params' in self.config.keys():
+            query = self.restful_params(self.config['default_params'])
+            query_string = None
+            if len(query) > 0:
+                query_string = '?' + urllib.urlencode(query)
+            if query_string is not None:
+                url += query_string
+
         params = self.restful_params(self.params_for(model))
         http_response, body = self.http_request(http_method, url, params)
         return self.response(http_response, body)
@@ -153,9 +161,6 @@ class RestfulHttpAdapter(AbstractAdapter):
         """Builds and encodes a parameters dict for the request"""
         params = {}
 
-        if 'default_params' in self.config.keys():
-            params.update(self.config['default_params'])
-
         if 'params_wrapper' in self.config.keys():
             params.update({self.config['params_wrapper']: model.fields})
         else:
@@ -170,7 +175,10 @@ class RestfulHttpAdapter(AbstractAdapter):
         and returns None if there are no parameters.
 
         """
-        query = relation.query()
+        query = {}
+        if 'default_params' in self.config.keys():
+            query.update(self.config['default_params'])
+        query.update(relation.query())
         mods = relation.modifiers_value()
         if 'query' in mods:
             query.update(mods['query'])
