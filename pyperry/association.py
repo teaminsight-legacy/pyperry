@@ -163,7 +163,7 @@ class Association(object):
         poly_type = None
         if (self.options.has_key('polymorphic') and
             self.options['polymorphic'] and obj):
-            if type(obj.__class__) in [pyperry.base.Base, pyperry.base.BaseMeta]:
+            if isinstance(obj, pyperry.base.Base):
                 poly_type = getattr(obj, '%s_type' % self.id)
             else:
                 poly_type = obj
@@ -198,14 +198,16 @@ class Association(object):
                 return self._get_resolved_class(type_string)
 
     def _get_resolved_class(self, string):
-        class_name = self.target_klass.resolve_name(string)
-        if not class_name:
+        class_names = self.target_klass.resolve_name(string)
+        # remove duplicate entries created by module reloading
+        unique_names = list(set(class_names))
+        if not unique_names:
             raise errors.ModelNotDefined, 'Model %s is not defined.' % (string)
-        elif len(class_name) > 1:
+        elif len(unique_names) > 1:
             raise errors.AmbiguousClassName, ('Class name %s is'
                 ' ambiguous.  Use the namespace option to get your'
-                ' specific class.  Got classes %s' % (string, str(class_name)))
-        return class_name[0]
+                ' specific class.  Got classes %s' % (string, str(unique_names)))
+        return unique_names[0]
 
     def _base_scope(self, obj):
         return self.source_klass(obj).scoped().apply_finder_options(
